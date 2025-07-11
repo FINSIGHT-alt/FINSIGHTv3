@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FinSight</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9fafc;
+      margin: 0;
+      padding: 20px;
+      color: #222;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 32px;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    #suggestions {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-top: none;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #suggestions div {
+      padding: 10px;
+      cursor: pointer;
+    }
+    #suggestions div:hover {
+      background: #f0f0f0;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      margin-top: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .price {
+      font-size: 24px;
+      color: green;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      margin-top: 20px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    ul {
+      margin-top: 5px;
+      padding-left: 20px;
+    }
+    canvas {
+      margin-top: 40px;
+      max-width: 100%;
+      height: 400px !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FinSight</h1>
+    <input id="stockInput" placeholder="Search: AAPL, BTC, GOLD, TCS" autocomplete="off" />
+    <div id="suggestions"></div>
+    <div id="result"></div>
+    <canvas id="priceChart"></canvas>
+  </div>
+
+  <script>
+    const twelveApiKey = "7cd3b9a048514968adbe03ef5136a2fb";
+    const indianStocks = ["RELIANCE", "TCS", "INFY", "SBIN", "HDFCBANK", "ICICIBANK"];
+    const cryptoMap = {
+      BTC: { id: "bitcoin", pros: ["Most established crypto", "Widely accepted", "Finite supply"], cons: ["High fees", "Slow transactions", "Volatile"] },
+      ETH: { id: "ethereum", pros: ["Smart contracts", "DeFi leader", "Strong dev community"], cons: ["High gas fees", "Scalability issues"] },
+      BNB: { id: "binancecoin", pros: ["Low fees", "Backed by Binance", "Fast transactions"], cons: ["Centralized", "Regulatory risks"] },
+      XRP: { id: "ripple", pros: ["Fast transfers", "Low cost", "Bank adoption"], cons: ["Ongoing SEC case", "Centralized nodes"] },
+      DOGE: { id: "dogecoin", pros: ["Popular", "Cheap transactions", "Elon Musk support"], cons: ["Inflationary", "Lacks strong use case"] },
+      ADA: { id: "cardano", pros: ["Academic approach", "Eco-friendly", "Scalable roadmap"], cons: ["Slow development", "Lower adoption"] },
+      SOL: { id: "solana", pros: ["High throughput", "Low fees", "Growing ecosystem"], cons: ["Outages", "Centralization concerns"] },
+      AVAX: { id: "avalanche-2", pros: ["Fast and scalable", "EVM compatible", "Low fees"], cons: ["Newer chain", "Competition"] },
+      LTC: { id: "litecoin", pros: ["Faster than BTC", "Low fees", "Good liquidity"], cons: ["Few upgrades", "Less innovation"] },
+      DOT: { id: "polkadot", pros: ["Cross-chain support", "Innovative tech"], cons: ["Complex to use", "Still developing"] }
+    };
+    const metals = { GOLD: "gold", SILVER: "silver" };
+    const suggestionsList = ["AAPL", "TSLA", "GOOGL", "MSFT", ...Object.keys(cryptoMap), ...Object.keys(metals), ...indianStocks];
+
+    let chart;
+
+    document.getElementById("stockInput").addEventListener("input", function () {
+      const query = this.value.toUpperCase();
+      const suggBox = document.getElementById("suggestions");
+      suggBox.innerHTML = '';
+      if (!query) return;
+      suggestionsList.filter(sym => sym.includes(query)).forEach(sym => {
+        const div = document.createElement("div");
+        div.textContent = sym;
+        div.onclick = () => {
+          document.getElementById("stockInput").value = sym;
+          suggBox.innerHTML = '';
+          loadAsset(sym);
+        };
+        suggBox.appendChild(div);
+      });
+    });
+
+    async function loadAsset(symbol) {
+      const result = document.getElementById("result");
+      const ctx = document.getElementById("priceChart").getContext("2d");
+      result.innerHTML = "";
+
+      if (!suggestionsList.includes(symbol)) {
+        window.open(`https://www.google.com/search?q=${symbol}+stock+price`, '_blank');
+        return;
+      }
+
+      if (indianStocks.includes(symbol)) {
+        window.open(`https://www.google.com/search?q=${symbol}+stock+price`, '_blank');
+        return;
+      }
+
+      let labels = [], prices = [], price = "N/A";
+      let pros = [], cons = [];
+
+      try {
+        if (cryptoMap[symbol]) {
+          const coin = cryptoMap[symbol];
+          const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin.id}&vs_currencies=usd`);
+          const data = await res.json();
+          price = "$" + data[coin.id].usd;
+
+          const hist = await fetch(`https://api.coingecko.com/api/v3/coins/${coin.id}/market_chart?vs_currency=usd&days=1`);
+          const histData = await hist.json();
+          labels = histData.prices.map(p => new Date(p[0]).toLocaleTimeString());
+          prices = histData.prices.map(p => p[1].toFixed(2));
+          pros = coin.pros;
+          cons = coin.cons;
+        }
+        else if (metals[symbol]) {
+          const metal = metals[symbol];
+          const res = await fetch(`https://api.metals.live/v1/spot/${metal}`);
+          const data = await res.json();
+          const usd = data[0].price;
+          price = "₹" + (usd * 83).toFixed(2);
+          labels = Array.from({ length: 12 }, (_, i) => `${i + 1}h`);
+          prices = labels.map(() => (usd + Math.random()).toFixed(2));
+          if (symbol === "GOLD") {
+            pros = ["Safe haven", "Inflation hedge", "Globally trusted"];
+            cons = ["No yield", "Storage cost", "Volatile in short term"];
+          } else {
+            pros = ["Used in industry", "Cheaper than gold"];
+            cons = ["Volatile", "Lower liquidity"];
+          }
+        }
+        else {
+          const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${twelveApiKey}`);
+          const data = await res.json();
+          price = "$" + parseFloat(data.price).toFixed(2);
+
+          const chartRes = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1h&outputsize=12&apikey=${twelveApiKey}`);
+          const chartData = await chartRes.json();
+          labels = chartData.values.map(v => v.datetime.split(" ")[1]).reverse();
+          prices = chartData.values.map(v => parseFloat(v.close)).reverse();
+        }
+
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<h2>${symbol}</h2><div class="price">Price: ${price}</div>`;
+
+        if (pros.length || cons.length) {
+          if (pros.length) {
+            card.innerHTML += `<div class="section-title">Pros:</div><ul>${pros.map(p => `<li>${p}</li>`).join("")}</ul>`;
+          }
+          if (cons.length) {
+            card.innerHTML += `<div class="section-title">Cons:</div><ul>${cons.map(p => `<li>${p}</li>`).join("")}</ul>`;
+          }
+        }
+
+        result.appendChild(card);
+
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Price',
+              data: prices,
+              borderColor: 'blue',
+              fill: false,
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: { title: { display: true, text: 'Time' }},
+              y: { title: { display: true, text: 'Price' }}
+            }
+          }
+        });
+
+      } catch (e) {
+        result.innerHTML = `<div class="card">Error loading data for ${symbol}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
